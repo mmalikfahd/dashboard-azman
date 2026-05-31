@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import {
   TrendingUp,
   TrendingDown,
@@ -11,46 +12,10 @@ import {
   Plus,
   ArrowUpRight,
   ArrowDownRight,
+  Loader2,
 } from "lucide-react"
-
-// Mock data - will connect to Supabase later
-const mockStats = {
-  balance: 2850000,
-  income: 5000000,
-  expense: 2150000,
-  savingRate: 57,
-}
-
-const mockHabitsToday = [
-  { id: 1, name: "Belajar coding 2 jam", completed: true, type: "checkbox" },
-  { id: 2, name: "Minum air 2 liter", completed: true, type: "numeric", target: 8, current: 8 },
-  { id: 3, name: "Membaca 10 halaman", completed: false, type: "numeric", target: 10, current: 0 },
-  { id: 4, name: "Tidur sebelum jam 23.00", completed: false, type: "checkbox" },
-  { id: 5, name: "Catat pengeluaran", completed: true, type: "checkbox" },
-]
-
-const mockRecentTransactions = [
-  { id: 1, type: "expense", category: "Makanan", amount: 25000, note: "Makan siang", date: "27 May 2026" },
-  { id: 2, type: "income", category: "Freelance", amount: 500000, note: "Project website", date: "27 May 2026" },
-  { id: 3, type: "expense", category: "Transportasi", amount: 15000, note: "Bensin motor", date: "26 May 2026" },
-  { id: 4, type: "expense", category: "Internet", amount: 150000, note: "Paket data bulan Mei", date: "25 May 2026" },
-  { id: 5, type: "expense", category: "Hiburan", amount: 75000, note: "Nonton film", date: "24 May 2026" },
-]
-
-const mockBudgets = [
-  { category: "Makanan", spent: 450000, limit: 500000, color: "bg-green-500" },
-  { category: "Transportasi", spent: 200000, limit: 250000, color: "bg-blue-500" },
-  { category: "Hiburan", spent: 180000, limit: 150000, color: "bg-red-500" },
-  { category: "Internet", spent: 150000, limit: 150000, color: "bg-yellow-500" },
-]
-
-const mockHabitStats = {
-  completedToday: 3,
-  totalToday: 5,
-  completionRate: 76,
-  bestStreak: 14,
-  weakestHabit: "Membaca buku",
-}
+import Link from "next/link"
+import { createClient } from "@/lib/client"
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("id-ID", {
@@ -61,120 +26,287 @@ function formatCurrency(amount: number) {
   }).format(amount)
 }
 
+function getToday() {
+  return new Date().toISOString().split("T")[0]
+}
+
+const categoryMapping: Record<string, string[]> = {
+  "MAKANAN": ["makan", "makanan", "jajan", "jajanan", "pangan", "nasi", "bubur", "soto", "ayam", "ikan", "sayur", "buah", "gorengan", "martabak", "bakso", "sate", "gadogado", "rujak", "es teh", "kopi", "teh", "sarapan", "lunch", "makan siang", "makan malam", "dinner", "breakfast", "mie", "nasgor", "sambal", "lalap", "kerupuk", "telur", "daging", "udang", "cumi", "sushi", "pizza", "burger", "kfc", "mcd", "starbucks", "warung", "rumah makan", "kedai", "kantin"],
+  "BELANJA": ["belanja", "belanjaan", "shopping", "toko", "supermarket", "minimarket", "indomaret", "alfamart", "carrefour", "hypermart", "transmart", "giant", "lotte", "total", "family", "alfamidi", "inkmart"],
+  "TRANSPORTASI": ["bensin", "pertamax", "solar", "shell", "pertamina", "jamsostek", "parkir", "tol", "ojek", "gojek", "grab", "maxim", "taxi", "transport", "transportasi", "bus", "kereta", "krl", "mrt", "lrt", "pesawat", "kereta api", "kapal", "ferry"],
+  "HIBURAN": ["hiburan", "nonton", "film", "bioskop", "konser", "game", "gaming", "netflix", "spotify", "youtube", "disney", "playstation", "xbox", "steam", "epic", "wifi", "internet", "kuota"],
+  "KESEHATAN": ["kesehatan", "obat", "apotek", "dokter", "rumah sakit", "klinik", "medical", "check up", "vitamin", "suplemen", "masker", "hand sanitizer", "paracetamol", "bodrex", "promag", "obat batuk", "obat flu", "asuransi kesehatan"],
+  "EDUKASI": ["edukasi", "sekolah", "kuliah", "universitas", "kursus", "buku", "seragam", "alat tulis", "printer", "laptop", "komputer", "kelas", "les", "privat", "bimbel", "pendidikan", "studypal", "skripsi", "thesis", "tugas"],
+  "TAGIHAN": ["tagihan", "listrik", "pln", "air", "pdam", "gas", "pgas", "wifi", "internet", "bpjs", "abonemen", "langganan", "premi", "cicilan", "angsuran", "kredit"],
+  "LAINNYA": [],
+}
+
+const normalizeCategory = (category: string): string => {
+  if (!category) return "LAINNYA"
+  const catLower = category.toLowerCase()
+  for (const [baseCategory, keywords] of Object.entries(categoryMapping)) {
+    if (catLower === baseCategory.toLowerCase()) return baseCategory
+    if (keywords.some(keyword => catLower.includes(keyword))) {
+      return baseCategory
+    }
+  }
+  return catLower.toUpperCase()
+}
+
 export default function DashboardPage() {
+  const [isLoading, setIsLoading] = useState(true)
+  const [userName, setUserName] = useState("")
+  
+  const [stats, setStats] = useState({
+    balance: 0,
+    income: 0,
+    expense: 0,
+    savingRate: 0,
+  })
+  
+  const [recentTransactions, setRecentTransactions] = useState<any[]>([])
+  const [monthlyTransactions, setMonthlyTransactions] = useState<any[]>([])
+  const [categories, setCategories] = useState<any[]>([])
+  const [habits, setHabits] = useState<any[]>([])
+  const [habitLogs, setHabitLogs] = useState<any[]>([])
+  const [budgets, setBudgets] = useState<any[]>([])
+  const [expenses, setExpenses] = useState<any[]>([])
+
+  useEffect(() => {
+    fetchDashboardData()
+  }, [])
+
+  const fetchDashboardData = async () => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const today = getToday()
+    const currentMonth = `${today.substring(0, 7)}-01`
+
+    const [
+      profileResult,
+      transactionsResult,
+      categoriesResult,
+      habitsResult,
+      habitLogsResult,
+      budgetsResult,
+    ] = await Promise.all([
+      supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
+      supabase
+        .from("transactions")
+        .select("*")
+        .eq("user_id", user.id)
+        .gte("transaction_date", currentMonth)
+        .order("transaction_date", { ascending: false }),
+      supabase.from("categories").select("*").eq("user_id", user.id),
+      supabase.from("habits").select("*").eq("user_id", user.id),
+      supabase.from("habit_logs").select("*").eq("user_id", user.id).eq("log_date", today),
+      supabase.from("budgets").select("*").eq("user_id", user.id).eq("month", new Date().getMonth() + 1).eq("year", new Date().getFullYear()),
+    ])
+
+    if (profileResult?.data) {
+      setUserName(profileResult.data.full_name || "User")
+    }
+
+    if (transactionsResult.data) {
+      const txs = transactionsResult.data
+      const income = txs.filter((t: any) => t.type === "income").reduce((sum: number, t: any) => sum + parseFloat(t.amount), 0)
+      const expense = txs.filter((t: any) => t.type === "expense").reduce((sum: number, t: any) => sum + parseFloat(t.amount), 0)
+      const balance = income - expense
+      const savingRate = income > 0 ? Math.round(((income - expense) / income) * 100) : 0
+
+      setStats({ balance, income, expense, savingRate })
+      setRecentTransactions(txs.slice(0, 5))
+      setMonthlyTransactions(txs)
+    }
+
+    if (categoriesResult.data) setCategories(categoriesResult.data)
+    if (habitsResult.data) setHabits(habitsResult.data)
+    if (habitLogsResult.data) setHabitLogs(habitLogsResult.data)
+    if (budgetsResult.data) setBudgets(budgetsResult.data)
+    
+    if (transactionsResult.data) {
+      const monthExpenses = transactionsResult.data.filter((t: any) => t.type === "expense")
+      setExpenses(monthExpenses)
+    }
+
+    setIsLoading(false)
+  }
+
+  const getCategoryById = (id: string) => categories.find((c: any) => c.id === id)
+
+  const completedHabits = habitLogs.filter((l) => l.is_completed).length
+  const totalHabits = habits.length
+  const completionRate = totalHabits > 0 ? Math.round((completedHabits / totalHabits) * 100) : 0
+  const bestStreak = habits.reduce((max: number, h: any) => Math.max(max, h.streak || 0), 0)
+  const weakestHabit = habits.length > 0 ? habits.reduce((worst: any, h: any) => 
+    (!worst || (h.completion_rate || 0) < (worst.completion_rate || 0)) ? h : worst
+  , null) : null
+
+  const getBudgetProgress = () => {
+    return budgets.map((b: any) => {
+      const budgetCategory = normalizeCategory(b.category || "")
+      const spent = expenses
+        .filter((e: any) => normalizeCategory(e.category || "") === budgetCategory)
+        .reduce((sum: number, e: any) => sum + (parseFloat(e.amount) || 0), 0)
+      const percentage = Math.round((spent / (parseFloat(b.amount) || 1)) * 100)
+      return {
+        ...b,
+        spent,
+        percentage,
+        category: b.category || "Unknown",
+        icon: "📦",
+        color: percentage > 100 ? "bg-red-500" : percentage > 70 ? "bg-yellow-500" : "bg-green-500",
+      }
+    })
+  }
+
+  const budgetProgress = getBudgetProgress()
+
+  const getDailyChartData = () => {
+    const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()
+    const dailyData: { day: string; income: number; expense: number }[] = []
+
+    for (let i = 1; i <= daysInMonth; i++) {
+      const dateStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(i).padStart(2, "0")}`
+      const dayData = monthlyTransactions.filter((t: any) => t.transaction_date === dateStr)
+      const income = dayData.filter((t: any) => t.type === "income").reduce((sum: number, t: any) => sum + (parseFloat(t.amount) || 0), 0)
+      const expense = dayData.filter((t: any) => t.type === "expense").reduce((sum: number, t: any) => sum + (parseFloat(t.amount) || 0), 0)
+      dailyData.push({
+        day: String(i),
+        income,
+        expense,
+      })
+    }
+
+    const maxValue = Math.max(...dailyData.map((d) => Math.max(d.income, d.expense)), 1)
+    return { dailyData, maxValue }
+  }
+
+  const { dailyData, maxValue } = getDailyChartData()
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-64">
+        <Loader2 className="animate-spin text-blue-600" size={40} />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Greeting */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Good evening, Azman</h1>
-        <p className="text-slate-500">Tuesday, 27 May 2026</p>
+        <h1 className="text-xl sm:text-2xl font-bold text-foreground">
+          Good evening, {userName}
+        </h1>
+        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+          {new Date().toLocaleDateString("id-ID", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          })}
+        </p>
       </div>
 
       {/* Financial Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl p-6 border border-slate-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-500">Saldo Bulan Ini</p>
-              <p className="text-2xl font-bold text-slate-900 mt-1">
-                {formatCurrency(mockStats.balance)}
+      <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="bg-card rounded-2xl p-4 sm:p-6 border border-border">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs sm:text-sm text-muted-foreground truncate">Saldo Bulan Ini</p>
+              <p className="text-lg sm:text-2xl font-bold text-foreground mt-1 truncate">
+                {formatCurrency(stats.balance)}
               </p>
             </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-              <Wallet className="text-blue-600" size={24} />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
+              <Wallet className="text-primary" size={20} />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-6 border border-slate-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-500">Pemasukan</p>
-              <p className="text-2xl font-bold text-green-600 mt-1">
-                {formatCurrency(mockStats.income)}
+        <div className="bg-card rounded-2xl p-4 sm:p-6 border border-border">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs sm:text-sm text-muted-foreground truncate">Pemasukan</p>
+              <p className="text-lg sm:text-2xl font-bold text-green-600 mt-1 truncate">
+                {formatCurrency(stats.income)}
               </p>
             </div>
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-              <TrendingUp className="text-green-600" size={24} />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-xl flex items-center justify-center flex-shrink-0">
+              <TrendingUp className="text-green-600" size={20} />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-6 border border-slate-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-500">Pengeluaran</p>
-              <p className="text-2xl font-bold text-red-600 mt-1">
-                {formatCurrency(mockStats.expense)}
+        <div className="bg-card rounded-2xl p-4 sm:p-6 border border-border">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs sm:text-sm text-muted-foreground truncate">Pengeluaran</p>
+              <p className="text-lg sm:text-2xl font-bold text-red-600 mt-1 truncate">
+                {formatCurrency(stats.expense)}
               </p>
             </div>
-            <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
-              <TrendingDown className="text-red-600" size={24} />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0">
+              <TrendingDown className="text-red-600" size={20} />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-6 border border-slate-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-500">Saving Rate</p>
-              <p className="text-2xl font-bold text-blue-600 mt-1">
-                {mockStats.savingRate}%
+        <div className="bg-card rounded-2xl p-4 sm:p-6 border border-border">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs sm:text-sm text-muted-foreground truncate">Saving Rate</p>
+              <p className="text-lg sm:text-2xl font-bold text-primary mt-1 truncate">
+                {stats.savingRate}%
               </p>
             </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-              <Target className="text-blue-600" size={24} />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
+              <Target className="text-primary" size={20} />
             </div>
           </div>
         </div>
       </div>
 
       {/* Charts and Lists Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Income vs Expense Chart Placeholder */}
-        <div className="lg:col-span-2 bg-white rounded-2xl p-6 border border-slate-200">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="font-semibold text-slate-900">Pemasukan vs Pengeluaran</h3>
-            <select className="text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-600">
-              <option>7 hari terakhir</option>
-              <option>Bulan ini</option>
-              <option>6 bulan terakhir</option>
-            </select>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+        {/* Income vs Expense Chart */}
+        <div className="lg:col-span-2 bg-card rounded-2xl p-4 sm:p-6 border border-border">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-2">
+            <h3 className="font-semibold text-foreground text-sm sm:text-base">Pemasukan vs Pengeluaran</h3>
+            <span className="text-xs sm:text-sm text-muted-foreground">
+              {new Date().toLocaleDateString("id-ID", { month: "long", year: "numeric" })}
+            </span>
           </div>
-          <div className="h-64 bg-slate-50 rounded-xl flex items-center justify-center">
-            <div className="text-center">
-              <div className="flex items-center justify-center gap-8 mb-4">
+          <div className="h-48 sm:h-64 bg-accent rounded-xl flex items-center justify-center px-2 sm:px-4 overflow-x-auto">
+            <div className="w-full min-w-min">
+              <div className="flex items-center justify-center gap-4 sm:gap-8 mb-3 sm:mb-4">
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-green-500" />
-                  <span className="text-sm text-slate-600">Pemasukan</span>
+                  <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-green-500" />
+                  <span className="text-xs sm:text-sm text-muted-foreground">Pemasukan</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-red-500" />
-                  <span className="text-sm text-slate-600">Pengeluaran</span>
+                  <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-red-500" />
+                  <span className="text-xs sm:text-sm text-muted-foreground">Pengeluaran</span>
                 </div>
               </div>
-              {/* Simple bar chart visualization */}
-              <div className="flex items-end justify-center gap-4 h-32">
-                {["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"].map((day, i) => {
-                  const income = [120, 80, 150, 200, 100, 300, 250][i]
-                  const expense = [60, 90, 70, 180, 50, 120, 80][i]
-                  return (
-                    <div key={day} className="flex items-end gap-1">
+              <div className="flex items-end justify-center gap-0.5 sm:gap-1 h-32 sm:h-40">
+                {dailyData.map((data, i) => (
+                  <div key={i} className="flex flex-col items-center gap-0.5 sm:gap-1 flex-1 min-w-0">
+                    <div className="w-full flex items-end justify-center gap-0.5 h-24 sm:h-32">
                       <div
-                        className="w-6 bg-green-400 rounded-t"
-                        style={{ height: `${income * 0.3}px` }}
+                        className="w-1.5 sm:w-3 bg-green-400 rounded-t transition-all"
+                        style={{ height: `${maxValue > 0 ? (data.income / maxValue) * 100 : 0}%` }}
                       />
                       <div
-                        className="w-6 bg-red-400 rounded-t"
-                        style={{ height: `${expense * 0.3}px` }}
+                        className="w-1.5 sm:w-3 bg-red-400 rounded-t transition-all"
+                        style={{ height: `${maxValue > 0 ? (data.expense / maxValue) * 100 : 0}%` }}
                       />
                     </div>
-                  )
-                })}
-              </div>
-              <div className="flex justify-center gap-4 mt-2 text-xs text-slate-400">
-                {["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"].map((day) => (
-                  <span key={day} className="w-12 text-center">{day}</span>
+                    <span className="text-xs text-muted-foreground">{data.day}</span>
+                  </div>
                 ))}
               </div>
             </div>
@@ -182,157 +314,188 @@ export default function DashboardPage() {
         </div>
 
         {/* Habit Summary */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-slate-900">Habit Hari Ini</h3>
-            <span className="text-sm text-blue-600 font-medium">
-              {mockHabitStats.completedToday}/{mockHabitStats.totalToday} selesai
+        <div className="bg-card rounded-2xl p-4 sm:p-6 border border-border">
+          <div className="flex items-center justify-between mb-4 gap-2">
+            <h3 className="font-semibold text-foreground text-sm sm:text-base">Habit Hari Ini</h3>
+            <span className="text-xs sm:text-sm text-blue-600 font-medium whitespace-nowrap">
+              {completedHabits}/{totalHabits}
             </span>
           </div>
-          <div className="space-y-3">
-            {mockHabitsToday.map((habit) => (
-              <div
-                key={habit.id}
-                className={`flex items-center gap-3 p-3 rounded-xl ${
-                  habit.completed ? "bg-green-50" : "bg-slate-50"
-                }`}
-              >
-                {habit.completed ? (
-                  <CheckCircle2 className="text-green-500" size={20} />
-                ) : (
-                  <div className="w-5 h-5 rounded-full border-2 border-slate-300" />
-                )}
-                <span
-                  className={`text-sm ${
-                    habit.completed ? "text-slate-700" : "text-slate-500"
+          <div className="space-y-2 sm:space-y-3">
+            {habits.slice(0, 5).map((habit: any) => {
+              const log = habitLogs.find((l) => l.habit_id === habit.id)
+              const isCompleted = log?.is_completed || false
+              const isBadHabit = habit.habit_type === "bad_habit"
+              return (
+                <div
+                  key={habit.id}
+                  className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-xl ${
+                    isBadHabit
+                      ? isCompleted ? "bg-orange-100 dark:bg-orange-900/30" : "bg-orange-50 dark:bg-orange-950/20"
+                      : isCompleted ? "bg-green-100 dark:bg-green-900/30" : "bg-accent"
                   }`}
                 >
-                  {habit.name}
-                </span>
-              </div>
-            ))}
+                  {isCompleted ? (
+                    <CheckCircle2 className={`${isBadHabit ? 'text-orange-600 dark:text-orange-400' : 'text-green-600 dark:text-green-400'} flex-shrink-0`} size={18} />
+                  ) : (
+                    <div className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 flex-shrink-0 ${isBadHabit ? 'border-orange-400' : 'border-muted-foreground'}`} />
+                  )}
+                  <span
+                    className={`text-xs sm:text-sm truncate font-medium ${
+                      isBadHabit
+                        ? isCompleted ? "text-orange-900 dark:text-orange-100" : "text-orange-700 dark:text-orange-300"
+                        : isCompleted ? "text-green-900 dark:text-green-100" : "text-foreground"
+                    }`}
+                  >
+                    {habit.name}
+                    {isBadHabit && <span className="ml-1 text-xs opacity-70">(Buruk)</span>}
+                  </span>
+                </div>
+              )
+            })}
+            {habits.length === 0 && (
+              <p className="text-xs sm:text-sm text-muted-foreground text-center py-4">
+                Belum ada habit
+              </p>
+            )}
           </div>
-          <div className="grid grid-cols-2 gap-4 mt-6 pt-4 border-t border-slate-100">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 mt-4 sm:mt-6 pt-4 border-t border-border">
             <div className="text-center">
-              <p className="text-2xl font-bold text-blue-600">{mockHabitStats.completionRate}%</p>
-              <p className="text-xs text-slate-500">Completion Rate</p>
+              <p className="text-xl sm:text-2xl font-bold text-primary">{completionRate}%</p>
+              <p className="text-xs text-muted-foreground">Completion</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-orange-500 flex items-center justify-center gap-1">
-                <Flame size={20} /> {mockHabitStats.bestStreak}
+              <p className="text-xl sm:text-2xl font-bold text-orange-500 flex items-center justify-center gap-1">
+                <Flame size={16} /> {bestStreak}
               </p>
-              <p className="text-xs text-slate-500">Best Streak</p>
+              <p className="text-xs text-muted-foreground">Best Streak</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Budget Status and Recent Transactions */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Budget Status */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-slate-900">Budget Bulanan</h3>
-            <button className="text-sm text-blue-600 hover:underline font-medium flex items-center gap-1">
-              <Plus size={16} /> Tambah
-            </button>
+        <div className="bg-card rounded-2xl p-4 sm:p-6 border border-border">
+          <div className="flex items-center justify-between mb-4 gap-2">
+            <h3 className="font-semibold text-foreground text-sm sm:text-base">Budget Bulanan</h3>
+            <Link href="/budgets" className="text-xs sm:text-sm text-blue-600 hover:underline font-medium flex items-center gap-1 whitespace-nowrap">
+              <Plus size={14} /> Tambah
+            </Link>
           </div>
-          <div className="space-y-4">
-            {mockBudgets.map((budget, i) => {
-              const percentage = Math.round((budget.spent / budget.limit) * 100)
-              const isOver = percentage > 100
-              return (
-                <div key={i}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-slate-700">{budget.category}</span>
-                    <span className={`text-sm ${isOver ? "text-red-600" : "text-slate-600"}`}>
-                      {formatCurrency(budget.spent)} / {formatCurrency(budget.limit)}
+          {budgetProgress.length > 0 ? (
+            <div className="space-y-3 sm:space-y-4">
+              {budgetProgress.slice(0, 4).map((budget: any) => (
+                <div key={budget.id}>
+                  <div className="flex items-center justify-between mb-1 gap-2">
+                    <span className="text-xs sm:text-sm font-medium text-foreground flex items-center gap-1 truncate">
+                      {budget.icon} {budget.category}
+                    </span>
+                    <span className={`text-xs sm:text-sm whitespace-nowrap ${budget.percentage > 100 ? "text-red-600" : "text-muted-foreground"}`}>
+                      {formatCurrency(budget.spent)} / {formatCurrency(parseFloat(budget.amount) || 0)}
                     </span>
                   </div>
-                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-2 bg-accent rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${budget.color} ${
-                        isOver ? "opacity-80" : ""
-                      }`}
-                      style={{ width: `${Math.min(percentage, 100)}%` }}
+                      className={`h-full rounded-full ${budget.color}`}
+                      style={{ width: `${Math.min(budget.percentage, 100)}%` }}
                     />
                   </div>
-                  {isOver && (
-                    <div className="flex items-center gap-1 mt-1">
-                      <AlertCircle size={12} className="text-red-500" />
-                      <span className="text-xs text-red-500">Melebihi budget</span>
-                    </div>
-                  )}
                 </div>
-              )
-            })}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs sm:text-sm text-muted-foreground text-center py-4">
+              Belum ada budget
+            </p>
+          )}
         </div>
 
         {/* Recent Transactions */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-slate-900">Transaksi Terbaru</h3>
-            <button className="text-sm text-blue-600 hover:underline font-medium flex items-center gap-1">
-              <Plus size={16} /> Tambah
-            </button>
+        <div className="bg-card rounded-2xl p-4 sm:p-6 border border-border">
+          <div className="flex items-center justify-between mb-4 gap-2">
+            <h3 className="font-semibold text-foreground text-sm sm:text-base">Transaksi Terbaru</h3>
+            <Link href="/transactions" className="text-xs sm:text-sm text-blue-600 hover:underline font-medium flex items-center gap-1 whitespace-nowrap">
+              <Plus size={14} /> Tambah
+            </Link>
           </div>
-          <div className="space-y-3">
-            {mockRecentTransactions.map((tx) => (
-              <div key={tx.id} className="flex items-center justify-between py-2">
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      tx.type === "income"
-                        ? "bg-green-100 text-green-600"
-                        : "bg-red-100 text-red-600"
-                    }`}
-                  >
-                    {tx.type === "income" ? (
-                      <ArrowUpRight size={18} />
-                    ) : (
-                      <ArrowDownRight size={18} />
-                    )}
+          {recentTransactions.length > 0 ? (
+            <div className="space-y-2 sm:space-y-3">
+              {recentTransactions.map((tx: any) => {
+                const cat = getCategoryById(tx.category_id)
+                return (
+                  <div key={tx.id} className="flex items-center justify-between py-2 gap-2">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                      <div
+                        className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                          tx.type === "income"
+                            ? "bg-green-100 text-green-600"
+                            : "bg-red-100 text-red-600"
+                        }`}
+                      >
+                        {tx.type === "income" ? (
+                          <ArrowUpRight size={16} />
+                        ) : (
+                          <ArrowDownRight size={16} />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs sm:text-sm font-medium text-foreground truncate">
+                          {cat?.name || tx.type}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">{tx.note || "-"}</p>
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p
+                        className={`text-xs sm:text-sm font-semibold whitespace-nowrap ${
+                          tx.type === "income" ? "text-green-600" : "text-red-600"
+                        }`}
+                      >
+                        {tx.type === "income" ? "+" : "-"}
+                        {formatCurrency(parseFloat(tx.amount))}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(tx.transaction_date).toLocaleDateString("id-ID", {
+                          day: "numeric",
+                          month: "short",
+                        })}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-slate-800">{tx.category}</p>
-                    <p className="text-xs text-slate-500">{tx.note}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p
-                    className={`text-sm font-semibold ${
-                      tx.type === "income" ? "text-green-600" : "text-red-600"
-                    }`}
-                  >
-                    {tx.type === "income" ? "+" : "-"}
-                    {formatCurrency(tx.amount)}
-                  </p>
-                  <p className="text-xs text-slate-400">{tx.date}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-xs sm:text-sm text-muted-foreground text-center py-4">
+              Belum ada transaksi
+            </p>
+          )}
         </div>
       </div>
 
       {/* Smart Insights */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-6 text-white">
-        <h3 className="font-semibold mb-3 flex items-center gap-2">
-          <AlertCircle size={20} /> Smart Insights
+      <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-4 sm:p-6 text-white">
+        <h3 className="font-semibold mb-3 sm:mb-4 flex items-center gap-2 text-sm sm:text-base">
+          <AlertCircle size={18} /> Smart Insights
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white/10 rounded-xl p-4">
-            <p className="text-sm text-blue-100">Pengeluaran bulan ini</p>
-            <p className="text-lg font-semibold">turun 18% dari bulan lalu</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+          <div className="bg-white/10 rounded-xl p-3 sm:p-4">
+            <p className="text-xs sm:text-sm text-blue-100">Pengeluaran bulan ini</p>
+            <p className="text-base sm:text-lg font-semibold mt-1 truncate">
+              {formatCurrency(stats.expense)}
+            </p>
           </div>
-          <div className="bg-white/10 rounded-xl p-4">
-            <p className="text-sm text-blue-100">Kategori paling boros</p>
-            <p className="text-lg font-semibold">Makanan (Rp 450.000)</p>
+          <div className="bg-white/10 rounded-xl p-3 sm:p-4">
+            <p className="text-xs sm:text-sm text-blue-100">Saving Rate</p>
+            <p className="text-base sm:text-lg font-semibold mt-1">{stats.savingRate}%</p>
           </div>
-          <div className="bg-white/10 rounded-xl p-4">
-            <p className="text-sm text-blue-100">Habit paling konsisten</p>
-            <p className="text-lg font-semibold">Belajar Coding</p>
+          <div className="bg-white/10 rounded-xl p-3 sm:p-4">
+            <p className="text-xs sm:text-sm text-blue-100">Habit selesai hari ini</p>
+            <p className="text-base sm:text-lg font-semibold mt-1">
+              {completedHabits}/{totalHabits}
+            </p>
           </div>
         </div>
       </div>
