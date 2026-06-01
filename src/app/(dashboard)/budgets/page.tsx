@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic"
 import { useState, useEffect } from "react"
 import { Plus, AlertCircle, CheckCircle2, X, Edit2, Trash2, Loader2 } from "lucide-react"
 import { createClient } from "@/lib/client"
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
 
 interface Budget {
   id: string;
@@ -65,6 +66,8 @@ export default function BudgetsPage() {
   const [showModal, setShowModal] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteItemId, setDeleteItemId] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     category: "",
     amount: "",
@@ -185,10 +188,17 @@ export default function BudgetsPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Yakin hapus budget ini?")) return
+    setDeleteItemId(id)
+    setShowDeleteConfirm(true)
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteItemId) return
     
     const supabase = createClient()
-    await supabase.from("budgets").delete().eq("id", id)
+    await supabase.from("budgets").delete().eq("id", deleteItemId)
+    setShowDeleteConfirm(false)
+    setDeleteItemId(null)
     await fetchData()
   }
 
@@ -388,6 +398,16 @@ export default function BudgetsPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        title="Hapus Budget"
+        message="Apakah kamu yakin ingin menghapus budget ini? Tindakan ini tidak bisa dibatalkan."
+        onConfirm={confirmDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+        isDangerous
+      />
     </div>
   )
 }

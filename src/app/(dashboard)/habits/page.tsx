@@ -16,6 +16,7 @@ import {
   Loader2,
 } from "lucide-react"
 import { createClient } from "@/lib/client"
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
 
 function getToday() {
   return new Date().toISOString().split("T")[0]
@@ -79,6 +80,8 @@ export default function HabitsPage() {
   const [activeTab, setActiveTab] = useState<"today" | "all">("today")
   const [isSaving, setIsSaving] = useState(false)
   const [editingHabit, setEditingHabit] = useState<any>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteItemId, setDeleteItemId] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -271,10 +274,17 @@ export default function HabitsPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Yakin hapus habit ini?")) return
+    setDeleteItemId(id)
+    setShowDeleteConfirm(true)
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteItemId) return
     
     const supabase = createClient()
-    await supabase.from("habits").delete().eq("id", id)
+    await supabase.from("habits").delete().eq("id", deleteItemId)
+    setShowDeleteConfirm(false)
+    setDeleteItemId(null)
     await fetchData()
   }
 
@@ -638,6 +648,16 @@ export default function HabitsPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        title="Hapus Habit"
+        message="Apakah kamu yakin ingin menghapus habit ini? Tindakan ini tidak bisa dibatalkan."
+        onConfirm={confirmDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+        isDangerous
+      />
     </div>
   )
 }

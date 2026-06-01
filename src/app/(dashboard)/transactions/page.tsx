@@ -15,6 +15,7 @@ import {
   Loader2,
 } from "lucide-react"
 import { createClient } from "@/lib/client"
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("id-ID", {
@@ -41,6 +42,8 @@ export default function TransactionsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteItemId, setDeleteItemId] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     type: "expense",
@@ -131,10 +134,17 @@ export default function TransactionsPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Yakin hapus transaksi ini?")) return
+    setDeleteItemId(id)
+    setShowDeleteConfirm(true)
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteItemId) return
     
     const supabase = createClient()
-    await supabase.from("transactions").delete().eq("id", id)
+    await supabase.from("transactions").delete().eq("id", deleteItemId)
+    setShowDeleteConfirm(false)
+    setDeleteItemId(null)
     await fetchData()
   }
 
@@ -392,6 +402,16 @@ export default function TransactionsPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        title="Hapus Transaksi"
+        message="Apakah kamu yakin ingin menghapus transaksi ini? Tindakan ini tidak bisa dibatalkan."
+        onConfirm={confirmDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+        isDangerous
+      />
     </div>
   )
 }
