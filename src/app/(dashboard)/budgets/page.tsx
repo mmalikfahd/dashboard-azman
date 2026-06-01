@@ -6,9 +6,6 @@ import { useState, useEffect } from "react"
 import { Plus, AlertCircle, CheckCircle2, X, Edit2, Trash2, Loader2 } from "lucide-react"
 import { createClient } from "@/lib/client"
 
-// Force dynamic rendering
-export const dynamic = "force-dynamic"
-
 interface Budget {
   id: string;
   user_id: string;

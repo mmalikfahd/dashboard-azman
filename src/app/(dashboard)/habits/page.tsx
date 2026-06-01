@@ -17,9 +17,6 @@ import {
 } from "lucide-react"
 import { createClient } from "@/lib/client"
 
-// Force dynamic rendering
-export const dynamic = "force-dynamic"
-
 function getToday() {
   return new Date().toISOString().split("T")[0]
 }

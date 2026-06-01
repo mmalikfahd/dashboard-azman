@@ -19,9 +19,6 @@ import {
 import Link from "next/link"
 import { createClient } from "@/lib/client"
 
-// Force dynamic rendering
-export const dynamic = "force-dynamic"
-
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("id-ID", {
     style: "currency",

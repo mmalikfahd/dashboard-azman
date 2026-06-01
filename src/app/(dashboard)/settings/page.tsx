@@ -8,9 +8,6 @@ import { User, Bell, Shield, Palette, HelpCircle, LogOut, Camera, Loader2, Uploa
 import { createClient } from "@/lib/client"
 import { useTheme } from "@/components/providers/ThemeProvider"
 
-// Force dynamic rendering
-export const dynamic = "force-dynamic"
-
 export default function SettingsPage() {
   const router = useRouter()
   const { theme, toggleTheme } = useTheme()
