@@ -21,9 +21,6 @@ const nextConfig: NextConfig = {
   // React strict mode for development
   reactStrictMode: true,
 
-  // SWR config
-  swcMinify: true,
-
   // Experimental features
   experimental: {
     optimizePackageImports: ['lucide-react'],
