@@ -48,7 +48,19 @@ export default function ReportsPage() {
       console.error("Transactions error:", transactionsResult.error)
     }
 
-    const txs = transactionsResult.data || []
+    const allTxs = transactionsResult.data || []
+    
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const currentMonth = now.getMonth() + 1
+    
+    const startDate = period === "1" 
+      ? `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`
+      : new Date(currentYear, currentMonth - parseInt(period), 1).toISOString().split("T")[0]
+    
+    const txs = period === "all"
+      ? allTxs
+      : allTxs.filter((tx: any) => tx.transaction_date >= startDate)
 
     const totalIncome = txs
       .filter((t: any) => t.type === "income")
@@ -133,16 +145,17 @@ export default function ReportsPage() {
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">Laporan</h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-1">Analisis keuangan dan kebiasaanmu</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <label className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">Periode:</label>
           <select
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
-            className="px-3 sm:px-4 py-2 rounded-xl border border-border bg-background text-foreground focus:border-primary outline-none text-sm sm:text-base appearance-none cursor-pointer"
+            className="flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-xl border border-border bg-background text-foreground focus:border-primary outline-none text-xs sm:text-sm appearance-none cursor-pointer"
           >
             <option value="1" className="bg-background text-foreground">Bulan Ini</option>
             <option value="3" className="bg-background text-foreground">3 Bulan</option>
@@ -191,52 +204,55 @@ export default function ReportsPage() {
         <div className="bg-card rounded-2xl p-4 sm:p-6 border border-border">
           <h3 className="font-semibold text-foreground text-sm sm:text-base mb-4 sm:mb-6">Tren Pemasukan vs Pengeluaran</h3>
           {data.monthlyData.length > 0 ? (
-            <div className="flex items-end justify-between h-40 sm:h-48 px-1 sm:px-2 gap-0.5 sm:gap-1">
-              {data.monthlyData.map((data, i) => (
-                <div key={i} className="flex flex-col items-center gap-1 sm:gap-2 flex-1 min-w-0">
-                  <div className="w-full flex items-end justify-center gap-0.5 h-32 sm:h-40">
-                    <div
-                      className="w-2 sm:w-3 bg-green-400 rounded-t transition-all"
-                      style={{ height: `${(data.income / maxMonthlyValue) * 100}%` }}
-                    />
-                    <div
-                      className="w-2 sm:w-3 bg-red-400 rounded-t transition-all"
-                      style={{ height: `${(data.expense / maxMonthlyValue) * 100}%` }}
-                    />
+            <div className="space-y-4">
+              <div className="flex items-end justify-between h-40 sm:h-48 px-2 sm:px-4 gap-1 sm:gap-2 overflow-x-auto">
+                {data.monthlyData.map((data, i) => (
+                  <div key={i} className="flex flex-col items-center gap-1 sm:gap-2 flex-1 min-w-[40px] sm:min-w-[50px]">
+                    <div className="w-full flex items-end justify-center gap-1 h-32 sm:h-40">
+                      <div
+                        className="flex-1 min-w-[6px] sm:min-w-[8px] bg-green-400 rounded-t transition-all"
+                        style={{ height: `${(data.income / maxMonthlyValue) * 100}%` }}
+                      />
+                      <div
+                        className="flex-1 min-w-[6px] sm:min-w-[8px] bg-red-400 rounded-t transition-all"
+                        style={{ height: `${(data.expense / maxMonthlyValue) * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">{data.month}</span>
                   </div>
-                  <span className="text-xs text-muted-foreground">{data.month}</span>
+                ))}
+              </div>
+              <div className="flex items-center justify-center gap-4 sm:gap-6 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-green-500 flex-shrink-0" />
+                  <span className="text-xs sm:text-sm text-muted-foreground">Pemasukan</span>
                 </div>
-              ))}
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-red-500 flex-shrink-0" />
+                  <span className="text-xs sm:text-sm text-muted-foreground">Pengeluaran</span>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="h-40 sm:h-48 flex items-center justify-center text-muted-foreground text-sm">
               Tidak ada data
             </div>
           )}
-          <div className="flex items-center justify-center gap-4 sm:gap-6 mt-3 sm:mt-4">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-green-500" />
-              <span className="text-xs sm:text-sm text-muted-foreground">Pemasukan</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-red-500" />
-              <span className="text-xs sm:text-sm text-muted-foreground">Pengeluaran</span>
-            </div>
-          </div>
         </div>
 
         {/* Spending by Category */}
         <div className="bg-card rounded-2xl p-4 sm:p-6 border border-border">
           <h3 className="font-semibold text-foreground text-sm sm:text-base mb-4 sm:mb-6">Pengeluaran per Kategori</h3>
           {data.categoryData.length > 0 ? (
-            <div className="space-y-3 sm:space-y-4">
+            <div className="space-y-3 sm:space-y-4 max-h-64 sm:max-h-80 overflow-y-auto">
               {data.categoryData.map((data, i) => (
                 <div key={i}>
-                  <div className="flex items-center justify-between mb-1 gap-2">
-                    <span className="text-xs sm:text-sm font-medium text-foreground flex items-center gap-1 truncate">
-                      {data.icon} {data.category}
+                  <div className="flex items-center justify-between mb-1 gap-2 min-w-0">
+                    <span className="text-xs sm:text-sm font-medium text-foreground flex items-center gap-1 min-w-0 flex-1">
+                      <span className="flex-shrink-0">{data.icon}</span>
+                      <span className="truncate">{data.category}</span>
                     </span>
-                    <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">{formatCurrency(data.amount)}</span>
+                    <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap flex-shrink-0">{formatCurrency(data.amount)}</span>
                   </div>
                   <div className="h-2 sm:h-3 bg-accent rounded-full overflow-hidden">
                     <div
@@ -261,17 +277,17 @@ export default function ReportsPage() {
           <h3 className="font-semibold text-foreground text-sm sm:text-base">Laporan Habit</h3>
         </div>
         {data.habitData.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4">
             {data.habitData.map((data, i) => {
               const isBadHabit = data.habit_type === "bad_habit"
               return (
-              <div key={i} className={`rounded-xl p-3 sm:p-4 text-center ${isBadHabit ? 'bg-orange-50 border border-orange-200' : 'bg-accent'}`}>
-                <div className={`w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-3 rounded-full flex items-center justify-center flex-shrink-0 ${isBadHabit ? 'bg-orange-100' : 'bg-primary/10'}`}>
-                  <span className={`text-sm sm:text-lg font-bold ${isBadHabit ? 'text-orange-600' : 'text-primary'}`}>{data.rate}%</span>
+              <div key={i} className={`rounded-xl p-2 sm:p-3 md:p-4 text-center transition-all hover:shadow-md ${isBadHabit ? 'bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800' : 'bg-accent'}`}>
+                <div className={`w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-1 sm:mb-2 md:mb-3 rounded-full flex items-center justify-center flex-shrink-0 ${isBadHabit ? 'bg-orange-100 dark:bg-orange-900/40' : 'bg-primary/10'}`}>
+                  <span className={`text-xs sm:text-sm md:text-lg font-bold ${isBadHabit ? 'text-orange-600 dark:text-orange-400' : 'text-primary'}`}>{data.rate}%</span>
                 </div>
-                <p className={`text-xs sm:text-sm font-medium truncate ${isBadHabit ? 'text-orange-700' : 'text-foreground'}`}>{data.habit}</p>
-                {isBadHabit && <p className="text-xs text-orange-500">(Buruk)</p>}
-                <div className="mt-2 h-1.5 sm:h-2 bg-muted rounded-full overflow-hidden">
+                <p className={`text-xs sm:text-sm font-medium truncate line-clamp-2 ${isBadHabit ? 'text-orange-700 dark:text-orange-300' : 'text-foreground'}`}>{data.habit}</p>
+                {isBadHabit && <p className="text-xs text-orange-500 dark:text-orange-400 mt-0.5">(Buruk)</p>}
+                <div className="mt-1.5 sm:mt-2 h-1.5 sm:h-2 bg-muted rounded-full overflow-hidden">
                   <div
                     className={`h-full rounded-full ${isBadHabit ? 'bg-orange-500' : 'bg-primary'}`}
                     style={{ width: `${data.rate}%` }}

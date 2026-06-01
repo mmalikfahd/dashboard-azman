@@ -87,6 +87,7 @@ export default function DashboardPage() {
     const [
       profileResult,
       transactionsResult,
+      transactionsAllResult,
       categoriesResult,
       habitsResult,
       habitLogsResult,
@@ -99,6 +100,11 @@ export default function DashboardPage() {
         .eq("user_id", user.id)
         .gte("transaction_date", currentMonth)
         .order("transaction_date", { ascending: false }),
+      supabase
+        .from("transactions")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("transaction_date", { ascending: true }),
       supabase.from("categories").select("*").eq("user_id", user.id),
       supabase.from("habits").select("*").eq("user_id", user.id),
       supabase.from("habit_logs").select("*").eq("user_id", user.id).eq("log_date", today),
@@ -118,7 +124,10 @@ export default function DashboardPage() {
 
       setStats({ balance, income, expense, savingRate })
       setRecentTransactions(txs.slice(0, 5))
-      setMonthlyTransactions(txs)
+    }
+
+    if (transactionsAllResult.data) {
+      setMonthlyTransactions(transactionsAllResult.data)
     }
 
     if (categoriesResult.data) setCategories(categoriesResult.data)
@@ -184,7 +193,39 @@ export default function DashboardPage() {
     return { dailyData, maxValue }
   }
 
-  const { dailyData, maxValue } = getDailyChartData()
+  const getMonthlyChartData = () => {
+    const supabase = createClient()
+    const allTransactions = monthlyTransactions
+    
+    const monthlyMap = new Map<string, { income: number; expense: number }>()
+    allTransactions.forEach((tx: any) => {
+      const monthKey = tx.transaction_date?.substring(0, 7) || ""
+      const existing = monthlyMap.get(monthKey) || { income: 0, expense: 0 }
+      if (tx.type === "income") {
+        existing.income += (parseFloat(tx.amount) || 0)
+      } else {
+        existing.expense += (parseFloat(tx.amount) || 0)
+      }
+      monthlyMap.set(monthKey, existing)
+    })
+
+    const monthlyData = Array.from(monthlyMap.entries()).map(([month, values]) => {
+      const date = new Date(month + "-01")
+      return {
+        month: date.toLocaleDateString("id-ID", { month: "short" }),
+        income: values.income,
+        expense: values.expense,
+      }
+    })
+
+    const maxValue = Math.max(
+      ...monthlyData.map((d) => Math.max(d.income, d.expense)),
+      1
+    )
+    return { monthlyData, maxValue }
+  }
+
+  const { monthlyData, maxValue } = getMonthlyChartData()
 
   if (isLoading) {
     return (
@@ -274,43 +315,47 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Income vs Expense Chart */}
         <div className="lg:col-span-2 bg-card rounded-2xl p-4 sm:p-6 border border-border">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-2">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-2">
             <h3 className="font-semibold text-foreground text-sm sm:text-base">Pemasukan vs Pengeluaran</h3>
             <span className="text-xs sm:text-sm text-muted-foreground">
               {new Date().toLocaleDateString("id-ID", { month: "long", year: "numeric" })}
             </span>
           </div>
-          <div className="h-48 sm:h-64 bg-accent rounded-xl flex items-center justify-center px-2 sm:px-4 overflow-x-auto">
-            <div className="w-full min-w-min">
-              <div className="flex items-center justify-center gap-4 sm:gap-8 mb-3 sm:mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-green-500" />
-                  <span className="text-xs sm:text-sm text-muted-foreground">Pemasukan</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-red-500" />
-                  <span className="text-xs sm:text-sm text-muted-foreground">Pengeluaran</span>
-                </div>
-              </div>
-              <div className="flex items-end justify-center gap-0.5 sm:gap-1 h-32 sm:h-40">
-                {dailyData.map((data, i) => (
-                  <div key={i} className="flex flex-col items-center gap-0.5 sm:gap-1 flex-1 min-w-0">
-                    <div className="w-full flex items-end justify-center gap-0.5 h-24 sm:h-32">
+          {monthlyData.length > 0 ? (
+            <div className="space-y-4">
+              <div className="flex items-end justify-between h-40 sm:h-48 px-2 sm:px-4 gap-1 sm:gap-2 overflow-x-auto">
+                {monthlyData.map((data, i) => (
+                  <div key={i} className="flex flex-col items-center gap-1 sm:gap-2 flex-1 min-w-[40px] sm:min-w-[50px]">
+                    <div className="w-full flex items-end justify-center gap-1 h-32 sm:h-40">
                       <div
-                        className="w-1.5 sm:w-3 bg-green-400 rounded-t transition-all"
-                        style={{ height: `${maxValue > 0 ? (data.income / maxValue) * 100 : 0}%` }}
+                        className="flex-1 min-w-[6px] sm:min-w-[8px] bg-green-400 rounded-t transition-all"
+                        style={{ height: `${(data.income / maxValue) * 100}%` }}
                       />
                       <div
-                        className="w-1.5 sm:w-3 bg-red-400 rounded-t transition-all"
-                        style={{ height: `${maxValue > 0 ? (data.expense / maxValue) * 100 : 0}%` }}
+                        className="flex-1 min-w-[6px] sm:min-w-[8px] bg-red-400 rounded-t transition-all"
+                        style={{ height: `${(data.expense / maxValue) * 100}%` }}
                       />
                     </div>
-                    <span className="text-xs text-muted-foreground">{data.day}</span>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">{data.month}</span>
                   </div>
                 ))}
               </div>
+              <div className="flex items-center justify-center gap-4 sm:gap-6 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-green-500 flex-shrink-0" />
+                  <span className="text-xs sm:text-sm text-muted-foreground">Pemasukan</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-red-500 flex-shrink-0" />
+                  <span className="text-xs sm:text-sm text-muted-foreground">Pengeluaran</span>
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="h-40 sm:h-48 flex items-center justify-center text-muted-foreground text-sm">
+              Tidak ada data
+            </div>
+          )}
         </div>
 
         {/* Habit Summary */}

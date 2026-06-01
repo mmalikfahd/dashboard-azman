@@ -83,7 +83,9 @@ export default function BudgetsPage() {
     const currentMonth = now.getMonth() + 1
     const currentYear = now.getFullYear()
     const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`
-    const endDate = new Date(currentYear, currentMonth + 1, 0).toISOString().split("T")[0]
+    const endDate = new Date(currentYear, currentMonth, 0).toISOString().split("T")[0]
+
+    console.log("Date range:", startDate, "to", endDate)
 
     const [budgetsResult, expensesResult] = await Promise.all([
       supabase
@@ -97,21 +99,27 @@ export default function BudgetsPage() {
         .from("transactions")
         .select("*")
         .eq("user_id", user.id)
-        .eq("type", "expense")
-        .gte("transaction_date", startDate)
-        .lte("transaction_date", endDate),
+        .eq("type", "expense"),
     ])
 
+    console.log("Budgets result:", budgetsResult.data?.length, "expenses result:", expensesResult.data?.length)
+
     if (budgetsResult.data) setBudgets(budgetsResult.data)
-    if (expensesResult.data) setExpenses(expensesResult.data)
+    if (expensesResult.data) {
+      const monthExpenses = expensesResult.data.filter((e: any) => {
+        const txDate = e.transaction_date
+        return txDate >= startDate && txDate <= endDate
+      })
+      console.log("Filtered expenses for this month:", monthExpenses.length)
+      setExpenses(monthExpenses)
+    }
     setIsLoading(false)
   }
 
   const getSpentAmount = (categoryName: string) => {
     const catNormalized = normalizeCategory(categoryName)
-    return expenses
-      .filter((e) => normalizeCategory(e.category || "") === catNormalized)
-      .reduce((sum, e) => sum + (parseFloat(String(e.amount)) || 0), 0)
+    const filtered = expenses.filter((e) => normalizeCategory(e.category || "") === catNormalized)
+    return filtered.reduce((sum, e) => sum + (parseFloat(String(e.amount)) || 0), 0)
   }
 
   const getStatus = (spent: number, limit: number) => {

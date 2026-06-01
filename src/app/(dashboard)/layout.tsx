@@ -92,9 +92,16 @@ export default function DashboardLayout({
           {/* Logo & Theme Toggle */}
           <div className="px-6 py-5 border-b border-border">
             <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-xl font-bold text-foreground">FlowTrack</h1>
-                <p className="text-sm text-muted-foreground">Habit & Finance</p>
+              <div className="flex items-center gap-3">
+                <img 
+                  src="/logo/logo.png" 
+                  alt="FlowLedger Logo" 
+                  className="w-8 h-8 object-contain"
+                />
+                <div>
+                  <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-blue-500 bg-clip-text text-transparent">FlowLedger</h1>
+                  <p className="text-xs text-muted-foreground">Habit & Finance</p>
+                </div>
               </div>
               <button
                 onClick={toggleTheme}

@@ -3,8 +3,11 @@ import "./globals.css"
 import { ThemeProvider } from "@/components/providers/ThemeProvider"
 
 export const metadata: Metadata = {
-  title: "Dashboard Azman",
+  title: "FlowLedger - Habit & Finance Tracker",
   description: "Personal Habit & Finance Tracker",
+  icons: {
+    icon: "/logo/logo.png",
+  },
 }
 
 export default function RootLayout({
